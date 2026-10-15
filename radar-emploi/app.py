@@ -452,6 +452,18 @@ with tab_diag:
         ("Sites carrières lus directement", bool(targets), "Cliquez sur « Trouver les sites carrières lisibles » dans l'onglet Employeurs.")]:
         st.markdown(f"{'✅' if ok else '❌'} **{name}** — {'prêt' if ok else hint}")
     st.caption(" · ".join(f"{k} : {'trouvée' if os.environ.get(k) else 'absente'}" for k in KEYS[:4]))
+    if ft_ok:
+        _id, _sec = os.environ["FT_CLIENT_ID"], os.environ["FT_CLIENT_SECRET"]
+        _odd = [c for c in _id + _sec if not (c.isascii() and c.isprintable()) or c in "'\" "]
+        st.caption(f"Identifiant lu : {_id[:8]}… ({len(_id)} caractères) · clé secrète lue : {len(_sec)} caractères"
+                   + (f" · ⚠️ {len(_odd)} caractère(s) suspect(s) (guillemet, espace ou caractère invisible)" if _odd else ""))
+        if st.button("🔌 Tester la connexion France Travail", key="ft_test"):
+            try:
+                from core.sources.france_travail import get_token
+                get_token(Http(cfg.user_agent, retries=0))
+                st.success("Connexion réussie : France Travail accepte vos clés et l'abonnement à l'API Offres d'emploi v2 est actif.")
+            except HttpError as exc:
+                st.error(str(exc))
     st.subheader("Dernière mise à jour")
     if not last:
         st.info("Aucune mise à jour effectuée pour l'instant.")
