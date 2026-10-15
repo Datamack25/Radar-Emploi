@@ -9,10 +9,10 @@ from .annuaire import load_annuaire
 from .filters import evaluate
 from .http import Http, HttpError
 from .scoring import score
-from .sources import adzuna, ats, france_travail
+from .sources import adzuna, ats, france_travail, google_jobs, jooble
 from .text import norm, norm_title
 
-PRIORITY = {"ats": 0, "france_travail": 1, "adzuna": 2}
+PRIORITY = {"ats": 0, "france_travail": 1, "google": 2, "jooble": 3, "adzuna": 4}
 
 
 def ats_targets(cfg, store):
@@ -65,6 +65,13 @@ def run_update(cfg, store, progress=print) -> dict:
     progress("Lecture de France Travail…")
     source("france_travail", "France Travail", ft_on, "Clés FT_CLIENT_ID / FT_CLIENT_SECRET absentes",
            lambda: france_travail.fetch(cfg, http, progress))
+    g_on = bool(os.environ.get("SERPAPI_KEY"))
+    progress("Lecture de Google Emploi…")
+    source("google", "Google Emploi (LinkedIn, Indeed, WTTJ, HelloWork…)", g_on, "Clé SERPAPI_KEY absente",
+           lambda: google_jobs.fetch(cfg, http, progress))
+    progress("Lecture de Jooble…")
+    source("jooble", "Jooble", bool(os.environ.get("JOOBLE_KEY")), "Clé JOOBLE_KEY absente",
+           lambda: jooble.fetch(cfg, http, progress))
     progress("Lecture d'Adzuna…")
     source("adzuna", "Adzuna", az_on, "Clés ADZUNA_APP_ID / ADZUNA_APP_KEY absentes", lambda: adzuna.fetch(cfg, http, progress))
 

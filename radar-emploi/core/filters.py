@@ -170,7 +170,7 @@ def contract_info(o, title_n: str, desc_n: str) -> tuple[str | None, float | Non
         return kind, months, None
 
     emp = norm(raw.get("employment"))
-    if STAGE.search(emp) or re.search(r"\b(intern|internship|apprentice|freelance|contractor)\b", emp):
+    if STAGE.search(emp) or re.search(r"\b(intern|internship|apprentice|freelance|contractor|prestataire|stage)\b", emp):
         return None, None, "Stage / alternance / freelance"
     kind = None
     for text in (title_n, emp):

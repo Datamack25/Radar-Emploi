@@ -20,6 +20,7 @@ sys.path.insert(0, str(ROOT))
 REQUIRED = ["core/__init__.py", "core/annuaire.py", "core/config.py", "core/filters.py", "core/geo.py", "core/http.py",
             "core/pipeline.py", "core/scoring.py", "core/store.py", "core/text.py", "core/ui_html.py",
             "core/sources/__init__.py", "core/sources/france_travail.py", "core/sources/adzuna.py", "core/sources/ats.py",
+            "core/sources/google_jobs.py", "core/sources/jooble.py",
             "core/sources/liens.py", "config/profil.toml", "config/employeurs.csv"]
 _missing = [p for p in REQUIRED if not (ROOT / p).exists()]
 if _missing:
@@ -49,7 +50,7 @@ def _secret(k: str) -> str:
     return ""
 
 
-KEYS = ("FT_CLIENT_ID", "FT_CLIENT_SECRET", "ADZUNA_APP_ID", "ADZUNA_APP_KEY", "RADAR_CONTACT")
+KEYS = ("FT_CLIENT_ID", "FT_CLIENT_SECRET", "SERPAPI_KEY", "JOOBLE_KEY", "ADZUNA_APP_ID", "ADZUNA_APP_KEY", "RADAR_CONTACT")
 for _k in KEYS:
     if not os.environ.get(_k, "").strip():
         _v = _secret(_k)
@@ -70,7 +71,8 @@ from core.sources.liens import deep_links  # noqa: E402
 from core.store import STATUSES, Store  # noqa: E402
 
 PARIS = ZoneInfo("Europe/Paris")
-SOURCE_NAMES = {"france_travail": "France Travail", "adzuna": "Adzuna", "ats": "Site carrières de l'employeur"}
+SOURCE_NAMES = {"france_travail": "France Travail", "google": "Google Emploi", "jooble": "Jooble", "adzuna": "Adzuna",
+                "ats": "Site carrières de l'employeur"}
 PAGE = 12
 NO_REGION = "Région non précisée"
 CONTRACTS = ["CDI", "CDD", "Intérim", "Non précisé"]
@@ -155,6 +157,12 @@ def detail_dialog(uid: str):
         src = (f"Source : France Travail{' (partenaire ' + ex['partenaire'] + ')' if ex.get('partenaire') else ''} · "
                f"dernière mise à jour : {fmt_dt(ex.get('mise_a_jour'))}"
                + (f" · salaire affiché : {ex['salaire_affiche']}" if ex.get("salaire_affiche") else "") + ".")
+    elif r["source"] == "google":
+        src = f"Source : Google Emploi{' — publiée via ' + ex['via'] if ex.get('via') else ''}."
+        if ex.get("candidater"):
+            st.caption("Où candidater : " + " · ".join(f"[{c['site'] or 'lien'}]({ui.safe_url(c['url'])})" for c in ex["candidater"]))
+    elif r["source"] == "jooble":
+        src = f"Source : Jooble{' — publiée sur ' + ex['via'] if ex.get('via') else ''} (extrait : texte complet sur le lien d'origine)."
     elif r["source"] == "adzuna":
         src = "Offre propulsée par Adzuna (extrait : texte complet sur le lien d'origine)."
     else:
@@ -177,6 +185,8 @@ def detail_dialog(uid: str):
 # ------------------------------------------------------------------ état
 ft_ok = bool(os.environ.get("FT_CLIENT_ID") and os.environ.get("FT_CLIENT_SECRET"))
 az_ok = bool(os.environ.get("ADZUNA_APP_ID") and os.environ.get("ADZUNA_APP_KEY"))
+gg_ok = bool(os.environ.get("SERPAPI_KEY"))
+jb_ok = bool(os.environ.get("JOOBLE_KEY"))
 ann, targets = ats_targets(cfg, store)
 runs = store.last_runs(2)
 last = runs[0] if runs else None
@@ -192,7 +202,8 @@ st.html(ui.hero(
     f"juniors 0 à {EXP_MAX} ans — France uniquement — CDI ou CDD / intérim ≥ {DUR_MIN} mois — "
     f"salaire ≥ {SAL_MIN // 1000} k€ — publiées depuis moins de {cand.get('fraicheur_jours', 30)} jours",
     fmt_dt(last["finished"]) if last else "jamais",
-    [("✅ " if ft_ok else "❌ ") + "France Travail", ("✅ " if az_ok else "⚪ ") + "Adzuna",
+    [("✅ " if ft_ok else "❌ ") + "France Travail", ("✅ " if gg_ok else "⚪ ") + "Google Emploi",
+     ("✅ " if jb_ok else "⚪ ") + "Jooble", ("✅ " if az_ok else "⚪ ") + "Adzuna",
      f"🏦 {len(ann.employers)} employeurs suivis", f"🔌 {len(targets)} sites carrières lus directement"]))
 
 bcol, mcol = st.columns([1, 2.4], vertical_alignment="center")
@@ -200,13 +211,13 @@ with bcol:
     st.button("🔄  Mettre à jour les offres", key="maj", width="stretch", disabled=busy,
               on_click=lambda: st.session_state.update(updating=True))
 with mcol:
-    if not (ft_ok or az_ok):
-        st.html(ui.notice("warn", "Sans clés France Travail ni Adzuna, seuls les sites carrières lisibles directement sont lus "
-                                  "(surtout des fintech). Renseignez au moins FT_CLIENT_ID et FT_CLIENT_SECRET : voir l'onglet "
-                                  "« Sources & diagnostic », qui indique quelle clé manque."))
-    elif not ft_ok:
-        st.html(ui.notice("info", "Clés France Travail absentes : c'est pourtant la source qui couvre le mieux les banques et "
-                                  "assureurs en régions."))
+    _off = [n for n, ok in (("France Travail", ft_ok), ("Google Emploi", gg_ok), ("Jooble", jb_ok), ("Adzuna", az_ok)) if not ok]
+    if len(_off) == 4:
+        st.html(ui.notice("warn", "Aucune clé de plateforme : seuls les sites carrières lisibles directement sont lus. Ajoutez au moins "
+                                  "Google Emploi (SERPAPI_KEY : LinkedIn, Indeed, WTTJ, HelloWork…) et France Travail — voir l'onglet Aide."))
+    elif _off:
+        st.html(ui.notice("info", "Sources non branchées : " + ", ".join(_off) + ". Chaque clé ajoutée élargit la recherche "
+                                  "(onglet Aide, 5 minutes chacune, gratuites)."))
 
 if st.session_state.updating:
     run_long("updating", "Mise à jour en cours… ne fermez pas la page", lambda p: run_update(cfg, store, progress=p))
@@ -448,10 +459,12 @@ with tab_diag:
     st.subheader("Clés et accès")
     for name, ok, hint in [
         ("France Travail (API officielle)", ft_ok, "Source principale pour les banques et assureurs, partout en France : renseignez FT_CLIENT_ID et FT_CLIENT_SECRET (voir Aide)."),
-        ("Adzuna (API officielle)", az_ok, "Recommandé : agrège beaucoup de sites carrières de grands groupes. Clés gratuites sur developer.adzuna.com."),
+        ("Google Emploi via SerpApi", gg_ok, "Couvre LinkedIn, Indeed, Welcome to the Jungle, HelloWork, APEC, Jobteaser et les sites des employeurs : clé SERPAPI_KEY (serpapi.com)."),
+        ("Jooble (API officielle)", jb_ok, "Agrégateur gratuit : clé JOOBLE_KEY à demander sur jooble.org/api/about."),
+        ("Adzuna (API officielle)", az_ok, "Agrège beaucoup de sites carrières de grands groupes. Clés gratuites sur developer.adzuna.com."),
         ("Sites carrières lus directement", bool(targets), "Cliquez sur « Trouver les sites carrières lisibles » dans l'onglet Employeurs.")]:
         st.markdown(f"{'✅' if ok else '❌'} **{name}** — {'prêt' if ok else hint}")
-    st.caption(" · ".join(f"{k} : {'trouvée' if os.environ.get(k) else 'absente'}" for k in KEYS[:4]))
+    st.caption(" · ".join(f"{k} : {'trouvée' if os.environ.get(k) else 'absente'}" for k in KEYS[:6]))
     if ft_ok:
         _id, _sec = os.environ["FT_CLIENT_ID"], os.environ["FT_CLIENT_SECRET"]
         _odd = [c for c in _id + _sec if not (c.isascii() and c.isprintable()) or c in "'\" "]
@@ -489,8 +502,14 @@ with tab_diag:
 # ------------------------------------------------------------------ aide
 with tab_aide:
     st.markdown(f"""
-**Ce que fait le bouton « Mettre à jour ».** Il interroge l'API France Travail, l'API Adzuna (index France) et les sites carrières
-des employeurs de l'annuaire lisibles par API publique, puis ne garde que les offres qui remplissent **toutes** ces conditions :
+**Ce que fait le bouton « Mettre à jour ».** Il interroge, pour toute la France :
+- **France Travail** (API officielle) ;
+- **Google Emploi** via SerpApi : regroupe les offres de LinkedIn, Indeed, Welcome to the Jungle, HelloWork, APEC, Jobteaser,
+  Glassdoor et des sites carrières des employeurs ;
+- **Jooble** et **Adzuna** (agrégateurs, API officielles) ;
+- les **sites carrières** des employeurs de l'annuaire lisibles par API publique.
+
+Il ne garde ensuite que les offres qui remplissent **toutes** ces conditions :
 
 - **en France** (métropole et outre-mer) : un lieu étranger, « Remote », « Europe » ou un lieu introuvable est écarté ;
 - **métier** : conformité / LCB-FT / KYC / sanctions et embargos ; business analyst sur un sujet KYC, LCB-FT ou conformité ;
@@ -504,6 +523,15 @@ des employeurs de l'annuaire lisibles par API publique, puis ne garde que les of
 Les doublons sont fusionnés (le lien direct de l'employeur est préféré) et chaque offre reçoit une note sur 100.
 L'onglet « Sources & diagnostic » montre combien d'offres ont été écartées et pourquoi.
 
+**Clés à renseigner** (dans `.env` en local, ou *Settings → Secrets* sur Streamlit Cloud, puis *Reboot app*) :
+
+| Source | Clé(s) | Où l'obtenir |
+|---|---|---|
+| Google Emploi | `SERPAPI_KEY` | serpapi.com → compte gratuit → *Your Private API Key* (quota mensuel limité ; 6 recherches par mise à jour par défaut) |
+| Jooble | `JOOBLE_KEY` | jooble.org/api/about → formulaire, clé envoyée par e-mail |
+| Adzuna | `ADZUNA_APP_ID`, `ADZUNA_APP_KEY` | developer.adzuna.com → *Register* |
+| France Travail | `FT_CLIENT_ID`, `FT_CLIENT_SECRET` | voir ci-dessous |
+
 **Clés France Travail (gratuit).** francetravail.io → « Mes applications » → créer une application → l'abonner à l'API
 **Offres d'emploi v2** → copier l'identifiant et la clé secrète :
 - en local, dans le fichier `.env` à côté de `app.py` (`FT_CLIENT_ID=...` et `FT_CLIENT_SECRET=...`) ;
@@ -512,8 +540,9 @@ L'onglet « Sources & diagnostic » montre combien d'offres ont été écartées
 **Les grandes banques et assureurs.** Leurs sites carrières n'offrent pas d'accès automatisé autorisé : leurs offres arrivent
 par France Travail et Adzuna, et l'onglet Employeurs donne les liens directs.
 
-**Ce que l'application ne fait pas.** Elle n'invente aucun lien, ne contourne aucune protection et ne lit pas LinkedIn, Indeed,
-WTTJ, APEC, HelloWork ou Jobteaser (voir « Recherches manuelles »).
+**Ce que l'application ne fait pas.** Elle n'invente aucun lien, ne contourne aucune protection et ne lit pas directement LinkedIn,
+Indeed, WTTJ, APEC, HelloWork ou Jobteaser : leurs offres arrivent par Google Emploi, et l'onglet « Recherches manuelles » donne
+des recherches pré-remplies sur chacun.
 
 **Personnaliser.** Mots-clés, expérience, salaire, durée minimale : `config/profil.toml`. Employeurs : `config/employeurs.csv` ou l'onglet Employeurs.
 """)

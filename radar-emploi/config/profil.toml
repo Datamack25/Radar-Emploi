@@ -35,6 +35,18 @@ mots_cles = [
   "analyste risque crédit",
   "credit analyst",
 ]
-# Pages lues par mot-clé (France Travail : 150 offres par page ; Adzuna : 50)
+# Google Emploi (SerpApi) : chaque requête consomme 1 recherche de votre quota SerpApi.
+# Liste courte pour ménager l'offre gratuite : 6 mots-clés x 1 page = 6 recherches par mise à jour.
+mots_cles_google = [
+  "analyste LCB-FT",
+  "analyste KYC",
+  "chargé de conformité junior",
+  "analyste sanctions embargos",
+  "business analyst KYC conformité",
+  "analyste crédit junior",
+]
+# Pages lues par mot-clé (France Travail : 150 offres ; Google : 10 ; Jooble : 20 ; Adzuna : 50)
 pages_france_travail = 2
+pages_google = 1
+pages_jooble = 2
 pages_adzuna = 2

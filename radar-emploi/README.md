@@ -9,9 +9,14 @@ Veille d'offres d'emploi **juniors (0 à 3 ans)**, **en France uniquement**, pou
 Seules les offres en **CDI**, ou en **CDD / intérim d'au moins 3 mois**, sont retenues. Une offre qui affiche un salaire
 **inférieur à 33 k€ brut annuel** est écartée. Une offre sans salaire affiché est gardée.
 
-Sources : API France Travail, API Adzuna (index France), sites carrières lisibles par API publique (Greenhouse, Lever,
-Ashby, SmartRecruiters, Workable, Recruitee). Pour LinkedIn, Indeed, WTTJ, APEC, HelloWork et Jobteaser, l'application
-fournit des recherches pré-remplies que vous ouvrez vous-même.
+Sources :
+- API France Travail ;
+- Google Emploi via SerpApi, qui regroupe LinkedIn, Indeed, Welcome to the Jungle, HelloWork, APEC, Jobteaser et les sites
+  carrières des employeurs ;
+- API Jooble et API Adzuna ;
+- sites carrières lisibles par API publique (Greenhouse, Lever, Ashby, SmartRecruiters, Workable, Recruitee).
+
+Chaque source s'active dès que sa clé est renseignée (voir `.env.example` et l'onglet Aide).
 
 ## Lancer en local
 

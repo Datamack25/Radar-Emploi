@@ -117,11 +117,13 @@ def offer_card(r, is_new, age, source_name) -> str:
         f'<span class="rc-chip {"good" if (r.get("exp_min") == 0 or "Débutant" in exp or "Junior" in exp) else ""}">🎓 {esc(exp)}</span>',
     ]
     new = '<span class="rc-new">NOUVELLE</span>' if is_new else ""
+    v = (r.get("extra") or {}).get("via")
+    via = f" ({esc(v)})" if v else ""
     return (f'<div class="rc-card">{new}<div class="rc-top"><div><div class="rc-title">{esc(r.get("title"))}</div>'
             f'<div class="rc-comp">{esc(r.get("company"))}{" · " + esc(r["region"]) if r.get("region") else ""}</div></div>'
             f'<div class="rc-score" style="background:{_score_color(r.get("score", 0))}" title="Score de pertinence">{esc(r.get("score", 0))}</div></div>'
             f'<div class="rc-chips">{"".join(chips)}</div>'
-            f'<div class="rc-meta">Publiée {esc(age)} · via {esc(source_name)} · statut : {esc(r.get("status", ""))}</div></div>')
+            f'<div class="rc-meta">Publiée {esc(age)} · via {esc(source_name)}{via} · statut : {esc(r.get("status", ""))}</div></div>')
 
 
 def description_html(text) -> str:
