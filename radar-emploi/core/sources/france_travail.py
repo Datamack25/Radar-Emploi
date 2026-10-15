@@ -13,12 +13,18 @@ PAGE = 150
 
 
 def _explain(r) -> str:
-    txt = r.text[:300]
+    try:
+        j = r.json()
+        txt = f"{j.get('error', '')} {j.get('error_description', '')}".strip()
+    except ValueError:
+        txt = r.text[:200].strip()
     if "invalid_client" in txt:
-        return "identifiant ou clé secrète refusés par France Travail (vérifiez FT_CLIENT_ID et FT_CLIENT_SECRET)"
-    if "invalid_scope" in txt:
-        return "l'application francetravail.io n'est pas abonnée à l'API « Offres d'emploi v2 »"
-    return f"authentification refusée (HTTP {r.status_code})"
+        why = "identifiant ou clé secrète refusés"
+    elif "invalid_scope" in txt:
+        why = "application non abonnée à l'API « Offres d'emploi v2 »"
+    else:
+        why = "authentification refusée"
+    return f"{why} — réponse de France Travail : HTTP {r.status_code} {txt or '(vide)'}"
 
 
 def get_token(http: Http) -> str:
